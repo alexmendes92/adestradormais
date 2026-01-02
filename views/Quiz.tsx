@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useMemo } from 'react';
-import { ArrowRight, Clock, MapPin, MessageCircle, RotateCcw, Bone, Dog, Search, Info, Globe, Zap, Check, PawPrint, Brain, Target, Star } from 'lucide-react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
+import { ArrowRight, Clock, MapPin, MessageCircle, RotateCcw, Bone, Dog, Search, Info, Globe, Zap, Check, PawPrint, Brain, Target, Star, AlertCircle } from 'lucide-react';
 import { QuizState, ProblemType, DogSize } from '../types';
 import { BREEDS_DB } from '../breedsData';
 import { useAppConfig } from '../contexts/AppConfigContext';
@@ -14,6 +14,17 @@ export const QuizView: React.FC<QuizProps> = ({ quizState, setQuizState }) => {
   const { step, name, age, problem, breed, size } = quizState;
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState('Iniciando análise...');
+  
+  // Estado de Erros de Validação
+  const [errors, setErrors] = useState({
+    name: false,
+    breed: false,
+    age: false,
+    size: false
+  });
+
+  // Ref para scroll
+  const topRef = useRef<HTMLDivElement>(null);
 
   // Loading messages sequence
   const loadingMessages = [
@@ -45,6 +56,7 @@ export const QuizView: React.FC<QuizProps> = ({ quizState, setQuizState }) => {
   
   const resetQuiz = () => {
     setQuizState({ step: 1, name: '', age: '', problem: '', breed: '', size: '' });
+    setErrors({ name: false, breed: false, age: false, size: false });
   };
 
   useEffect(() => {
@@ -64,10 +76,24 @@ export const QuizView: React.FC<QuizProps> = ({ quizState, setQuizState }) => {
   }, [step]);
 
   const handleStep1Submit = () => {
-    if (!name.trim()) { alert("Como chama seu cão?"); return; }
-    if (!breed) { alert("Qual a raça do cão? (Se não souber, coloque SRD)"); return; }
-    if (!size) { alert("Qual o porte do cão?"); return; }
-    if (!age) { alert("Selecione a idade!"); return; }
+    const newErrors = {
+        name: !name.trim(),
+        breed: !breed.trim(),
+        size: !size,
+        age: !age
+    };
+
+    setErrors(newErrors);
+
+    // Se houver algum erro
+    if (Object.values(newErrors).some(Boolean)) {
+        // Scroll para o topo para ver os erros se necessário
+        if (topRef.current) {
+            topRef.current.scrollIntoView({ behavior: 'smooth' });
+        }
+        return;
+    }
+
     nextStep();
   };
 
@@ -78,6 +104,7 @@ export const QuizView: React.FC<QuizProps> = ({ quizState, setQuizState }) => {
   const handleBreedSelect = (selectedBreedName: string) => {
     updateState({ breed: selectedBreedName });
     setShowSuggestions(false);
+    setErrors(prev => ({ ...prev, breed: false }));
   };
 
   const getResult = () => {
@@ -86,7 +113,7 @@ export const QuizView: React.FC<QuizProps> = ({ quizState, setQuizState }) => {
         title: "Protocolo Filhote Exemplar",
         subtitle: "Educação Sanitária & Socialização",
         desc: `Nesta fase, o cérebro do ${name} é uma esponja. O foco será prevenir maus hábitos antes que se instalem.`,
-        img: "https://santanamendes.com.br/Site_Adestrador/Site_Adestrador_d0_img11.png",
+        img: "https://santanamendes.com.br/imagens/Site_Adestrador/Site_Adestrador_d0_img11.png",
         tags: ['Xixi no Lugar', 'Mordidinhas', 'Independência'],
         difficulty: 'Média'
       };
@@ -96,7 +123,7 @@ export const QuizView: React.FC<QuizProps> = ({ quizState, setQuizState }) => {
         title: "Reabilitação Comportamental",
         subtitle: "Controle de Reatividade & Confiança",
         desc: `Um programa técnico para devolver a paz ao ${name}, focando em dessensibilização e contra-condicionamento.`,
-        img: "https://santanamendes.com.br/Site_Adestrador/Site_Adestrador_d0_img13.png",
+        img: "https://santanamendes.com.br/imagens/Site_Adestrador/Site_Adestrador_d0_img13.png",
         tags: ['Segurança', 'Autocontrole', 'Vínculo'],
         difficulty: 'Alta'
       };
@@ -106,7 +133,7 @@ export const QuizView: React.FC<QuizProps> = ({ quizState, setQuizState }) => {
         title: "Passeio Educativo",
         subtitle: "Andar Junto & Foco no Condutor",
         desc: `Transformaremos o passeio do ${name} em um momento de conexão, acabando com os puxões através de técnicas de indução.`,
-        img: "https://santanamendes.com.br/Site_Adestrador/Site_Adestrador_d0_img12.png",
+        img: "https://santanamendes.com.br/imagens/Site_Adestrador/Site_Adestrador_d0_img12.png",
         tags: ['Sem Puxar', 'Foco', 'Socialização'],
         difficulty: 'Média'
       };
@@ -115,7 +142,7 @@ export const QuizView: React.FC<QuizProps> = ({ quizState, setQuizState }) => {
       title: "Obediência Funcional",
       subtitle: "Controle de Impulsos & Comandos",
       desc: `Ideal para o ${name} aprender a ter calma dentro de casa e respeitar limites, fortalecendo a liderança gentil.`,
-      img: "https://santanamendes.com.br/Site_Adestrador/Site_Adestrador_d0_img12.png",
+      img: "https://santanamendes.com.br/imagens/Site_Adestrador/Site_Adestrador_d0_img12.png",
         tags: ['Senta/Fica', 'Limites', 'Calma'],
         difficulty: 'Baixa'
     };
@@ -134,7 +161,7 @@ export const QuizView: React.FC<QuizProps> = ({ quizState, setQuizState }) => {
     <div className="bg-slate-50 min-h-full flex flex-col relative animate-fade-in pb-20">
       
       {/* Header com Progresso */}
-      <div className="bg-white px-6 pt-6 pb-4 rounded-b-3xl shadow-sm border-b border-slate-100 sticky top-0 z-40">
+      <div ref={topRef} className="bg-white px-6 pt-6 pb-4 rounded-b-3xl shadow-sm border-b border-slate-100 sticky top-0 z-40">
         <div className="flex justify-between items-end mb-3">
            <div>
               <h2 className="text-xl font-bold text-slate-900 font-brand leading-none">Diagnóstico</h2>
@@ -159,30 +186,38 @@ export const QuizView: React.FC<QuizProps> = ({ quizState, setQuizState }) => {
           <div className="space-y-6">
             {/* NAME */}
             <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center gap-1">
-                <Dog size={12} /> Nome do Cão
+              <label className={`text-xs font-bold uppercase tracking-wide flex items-center gap-1 ${errors.name ? 'text-red-500' : 'text-slate-500'}`}>
+                <Dog size={12} /> Nome do Cão {errors.name && '*'}
               </label>
               <input 
                 value={name}
-                onChange={(e) => updateState({ name: e.target.value })}
-                className={`w-full bg-white px-4 py-3.5 rounded-xl border border-slate-200 focus:border-${config.themeColor}-500 focus:ring-2 focus:ring-${config.themeColor}-100 focus:outline-none text-base font-bold text-slate-900 transition-all shadow-sm placeholder:font-normal placeholder:text-slate-300`}
+                onChange={(e) => {
+                    updateState({ name: e.target.value });
+                    if(e.target.value) setErrors(prev => ({...prev, name: false}));
+                }}
+                className={`w-full bg-white px-4 py-3.5 rounded-xl border focus:outline-none text-base font-bold text-slate-900 transition-all shadow-sm placeholder:font-normal placeholder:text-slate-300 ${errors.name ? 'border-red-500 bg-red-50 focus:border-red-500' : `border-slate-200 focus:border-${config.themeColor}-500 focus:ring-2 focus:ring-${config.themeColor}-100`}`}
                 placeholder="Ex: Thor"
                 type="text"
               />
+              {errors.name && <p className="text-red-500 text-[10px] font-bold flex items-center gap-1"><AlertCircle size={10}/> Campo obrigatório</p>}
             </div>
 
             {/* BREED AUTOCOMPLETE */}
             <div className="relative space-y-2">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center gap-1">
-                <Search size={12} /> Raça
+              <label className={`text-xs font-bold uppercase tracking-wide flex items-center gap-1 ${errors.breed ? 'text-red-500' : 'text-slate-500'}`}>
+                <Search size={12} /> Raça {errors.breed && '*'}
               </label>
               <div className="relative">
                 <input 
                   type="text"
                   value={breed}
-                  onChange={(e) => { updateState({ breed: e.target.value }); setShowSuggestions(true); }}
+                  onChange={(e) => { 
+                      updateState({ breed: e.target.value }); 
+                      setShowSuggestions(true); 
+                      if(e.target.value) setErrors(prev => ({...prev, breed: false}));
+                  }}
                   onFocus={() => setShowSuggestions(true)}
-                  className={`w-full bg-white px-4 py-3.5 rounded-xl border border-slate-200 focus:border-${config.themeColor}-500 focus:ring-2 focus:ring-${config.themeColor}-100 focus:outline-none text-base font-bold text-slate-900 transition-all shadow-sm placeholder:font-normal placeholder:text-slate-300`}
+                  className={`w-full bg-white px-4 py-3.5 rounded-xl border focus:outline-none text-base font-bold text-slate-900 transition-all shadow-sm placeholder:font-normal placeholder:text-slate-300 ${errors.breed ? 'border-red-500 bg-red-50 focus:border-red-500' : `border-slate-200 focus:border-${config.themeColor}-500 focus:ring-2 focus:ring-${config.themeColor}-100`}`}
                   placeholder="Busque a raça..."
                 />
                 {breed && (
@@ -191,6 +226,7 @@ export const QuizView: React.FC<QuizProps> = ({ quizState, setQuizState }) => {
                    </button>
                 )}
               </div>
+              {errors.breed && <p className="text-red-500 text-[10px] font-bold flex items-center gap-1"><AlertCircle size={10}/> Identifique a raça ou digite SRD</p>}
               
               {showSuggestions && breed.length > 0 && !selectedBreedData && (
                 <div className="absolute z-50 w-full mt-1 bg-white border border-slate-100 rounded-xl shadow-xl max-h-48 overflow-y-auto custom-scroll">
@@ -235,31 +271,32 @@ export const QuizView: React.FC<QuizProps> = ({ quizState, setQuizState }) => {
 
             {/* AGE */}
             <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center gap-1">
-                <Clock size={12} /> Idade
+              <label className={`text-xs font-bold uppercase tracking-wide flex items-center gap-1 ${errors.age ? 'text-red-500' : 'text-slate-500'}`}>
+                <Clock size={12} /> Idade {errors.age && '*'}
               </label>
               <div className="grid grid-cols-2 gap-3">
                 <button 
-                  onClick={() => updateState({ age: 'puppy' })}
-                  className={`py-3 px-4 rounded-xl border-2 transition-all flex items-center justify-center gap-2 ${age === 'puppy' ? `border-${config.themeColor}-500 bg-${config.themeColor}-50 text-${config.themeColor}-700 shadow-sm` : 'border-slate-100 bg-white text-slate-400 hover:border-slate-200'}`}
+                  onClick={() => { updateState({ age: 'puppy' }); setErrors(prev => ({...prev, age: false})); }}
+                  className={`py-3 px-4 rounded-xl border-2 transition-all flex items-center justify-center gap-2 ${age === 'puppy' ? `border-${config.themeColor}-500 bg-${config.themeColor}-50 text-${config.themeColor}-700 shadow-sm` : (errors.age ? 'border-red-300 bg-red-50 text-red-400' : 'border-slate-100 bg-white text-slate-400 hover:border-slate-200')}`}
                 >
                   <Bone size={18} className={age === 'puppy' ? 'fill-current' : ''}/>
                   <span className="font-bold text-sm">Filhote</span>
                 </button>
                 <button 
-                   onClick={() => updateState({ age: 'adult' })}
-                   className={`py-3 px-4 rounded-xl border-2 transition-all flex items-center justify-center gap-2 ${age === 'adult' ? `border-${config.themeColor}-500 bg-${config.themeColor}-50 text-${config.themeColor}-700 shadow-sm` : 'border-slate-100 bg-white text-slate-400 hover:border-slate-200'}`}
+                   onClick={() => { updateState({ age: 'adult' }); setErrors(prev => ({...prev, age: false})); }}
+                   className={`py-3 px-4 rounded-xl border-2 transition-all flex items-center justify-center gap-2 ${age === 'adult' ? `border-${config.themeColor}-500 bg-${config.themeColor}-50 text-${config.themeColor}-700 shadow-sm` : (errors.age ? 'border-red-300 bg-red-50 text-red-400' : 'border-slate-100 bg-white text-slate-400 hover:border-slate-200')}`}
                 >
                   <Dog size={18} className={age === 'adult' ? 'fill-current' : ''}/>
                   <span className="font-bold text-sm">Adulto</span>
                 </button>
               </div>
+              {errors.age && <p className="text-red-500 text-[10px] font-bold flex items-center gap-1"><AlertCircle size={10}/> Selecione a idade</p>}
             </div>
 
             {/* SIZE */}
             <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center gap-1">
-                <Target size={12} /> Porte
+              <label className={`text-xs font-bold uppercase tracking-wide flex items-center gap-1 ${errors.size ? 'text-red-500' : 'text-slate-500'}`}>
+                <Target size={12} /> Porte {errors.size && '*'}
               </label>
               <div className="grid grid-cols-3 gap-2">
                 {[
@@ -269,17 +306,18 @@ export const QuizView: React.FC<QuizProps> = ({ quizState, setQuizState }) => {
                 ].map((s) => (
                   <button
                     key={s.id}
-                    onClick={() => updateState({ size: s.id as DogSize })}
+                    onClick={() => { updateState({ size: s.id as DogSize }); setErrors(prev => ({...prev, size: false})); }}
                     className={`py-2.5 rounded-xl border-2 transition-all active:scale-95 ${
                       size === s.id 
                         ? 'border-slate-800 bg-slate-800 text-white shadow-md' 
-                        : 'border-slate-100 bg-white text-slate-400 hover:border-slate-200'
+                        : (errors.size ? 'border-red-300 bg-red-50 text-red-400' : 'border-slate-100 bg-white text-slate-400 hover:border-slate-200')
                     }`}
                   >
                     <span className="text-xs font-bold uppercase">{s.label}</span>
                   </button>
                 ))}
               </div>
+              {errors.size && <p className="text-red-500 text-[10px] font-bold flex items-center gap-1"><AlertCircle size={10}/> Selecione o tamanho</p>}
             </div>
           </div>
 

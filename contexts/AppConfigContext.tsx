@@ -17,7 +17,8 @@ const DEFAULT_SERVICES: ServiceDetailData[] = [
       "Prevenção de ansiedade de separação"
     ],
     duration: "8 aulas",
-    location: "Domiciliar"
+    location: "Domiciliar",
+    price: "R$ 1.200,00"
   },
   {
     id: 'obedience',
@@ -35,7 +36,8 @@ const DEFAULT_SERVICES: ServiceDetailData[] = [
       "Melhora na comunicação dono-cão"
     ],
     duration: "10 aulas",
-    location: "Domiciliar e Parque"
+    location: "Domiciliar e Parque",
+    price: "R$ 1.500,00"
   },
   {
     id: 'behavior',
@@ -52,7 +54,8 @@ const DEFAULT_SERVICES: ServiceDetailData[] = [
       "Reconstrução do vínculo de confiança"
     ],
     duration: "Sob avaliação",
-    location: "Domiciliar"
+    location: "Domiciliar",
+    price: "Sob Consulta"
   },
   {
     id: 'online',
@@ -69,7 +72,8 @@ const DEFAULT_SERVICES: ServiceDetailData[] = [
       "Flexibilidade de horário"
     ],
     duration: "1 hora/sessão",
-    location: "Google Meet / Zoom"
+    location: "Google Meet / Zoom",
+    price: "R$ 250,00"
   }
 ];
 
@@ -79,10 +83,12 @@ const DEFAULT_CONFIG: AppConfig = {
   slogan: 'Adestrador Comportamentalista',
   phone: '5511999999999',
   profileImage: 'https://santanamendes.com.br/imagens/Site_Adestrador/Site_Adestrador_d0_img14.png',
+  heroImage: 'https://santanamendes.com.br/imagens/Site_Adestrador/Site_Adestrador_d0_img0.png',
   themeColor: 'orange',
   instagramUrl: 'https://instagram.com',
   locationText: 'São Paulo - SP',
-  services: DEFAULT_SERVICES
+  services: DEFAULT_SERVICES,
+  isOnboarded: false // Inicia como falso para novos usuários
 };
 
 interface AppConfigContextType {

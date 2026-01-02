@@ -7,6 +7,13 @@ interface ScheduleProps {
   onBack: () => void;
 }
 
+const formatPhone = (value: string) => {
+  const numbers = value.replace(/\D/g, '');
+  if (numbers.length <= 2) return numbers;
+  if (numbers.length <= 7) return `(${numbers.slice(0, 2)}) ${numbers.slice(2)}`;
+  return `(${numbers.slice(0, 2)}) ${numbers.slice(2, 7)}-${numbers.slice(7, 11)}`;
+};
+
 export const ScheduleView: React.FC<ScheduleProps> = ({ onBack }) => {
   const { config } = useAppConfig();
   const [step, setStep] = useState(1);
@@ -45,6 +52,12 @@ export const ScheduleView: React.FC<ScheduleProps> = ({ onBack }) => {
       const cleanVal = value.replace(/\D/g, '').slice(0, 8);
       setFormData(prev => ({ ...prev, [name]: cleanVal }));
       return;
+    }
+
+    // Máscara para Telefone
+    if (name === 'phone') {
+        setFormData(prev => ({ ...prev, [name]: formatPhone(value) }));
+        return;
     }
 
     setFormData(prev => ({ ...prev, [name]: value }));

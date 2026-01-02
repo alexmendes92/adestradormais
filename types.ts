@@ -11,10 +11,12 @@ export interface AppConfig {
   slogan: string;
   phone: string; // Format: 5511999999999
   profileImage: string;
+  heroImage: string; // Nova imagem de capa
   themeColor: 'orange' | 'blue' | 'green' | 'purple';
   instagramUrl: string;
   locationText: string;
   services: ServiceDetailData[]; // Novo campo para lista de serviços
+  isOnboarded?: boolean; // Controle se o usuário já fez o setup inicial
 }
 
 export interface QuizState {
@@ -33,7 +35,6 @@ export interface ServiceData {
   image: string;
   tag: string;
   tagColor: string;
-  popular?: boolean;
 }
 
 export interface ServiceDetailData extends ServiceData {
@@ -41,6 +42,8 @@ export interface ServiceDetailData extends ServiceData {
   benefits: string[];
   duration: string;
   location: string;
+  price?: string; // Campo opcional de preço
+  popular?: boolean;
 }
 
 export interface BreedData {

@@ -1,143 +1,324 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Save, RotateCcw, Smartphone, User, Palette, Phone, MapPin, Instagram, Layout, Briefcase, Edit2, ChevronDown, ChevronUp, Link as LinkIcon, Trash2, Plus, ArrowRight, ArrowLeft, AlignLeft, Image as ImageIcon, Clock, List, CheckSquare, Upload, Grid } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Save, RotateCcw, Smartphone, User, Palette, Phone, MapPin, Instagram, Layout, Briefcase, Edit2, Plus, Upload, Camera, Image as ImageIcon, Grid, ChevronDown, ChevronUp, Loader2, Server, Database, CheckCircle, Sparkles, Zap } from 'lucide-react';
 import { useAppConfig } from '../contexts/AppConfigContext';
 import { AppConfig, ServiceDetailData } from '../types';
-import { SERVICE_IMAGES_GALLERY } from '../data/serviceImages';
+import { ServiceEditorView } from './ServiceEditor';
+import { HERO_IMAGES_GALLERY } from '../data/heroImages';
+
+// Utilitário para formatar telefone (Máscara)
+const formatPhone = (value: string) => {
+  const numbers = value.replace(/\D/g, '');
+  if (numbers.length <= 2) return numbers;
+  if (numbers.length <= 7) return `(${numbers.slice(0, 2)}) ${numbers.slice(2)}`;
+  return `(${numbers.slice(0, 2)}) ${numbers.slice(2, 7)}-${numbers.slice(7, 11)}`;
+};
+
+// Utilitário para comprimir imagem (Mesma lógica do Editor para evitar conflitos)
+const resizeImage = (file: File): Promise<string> => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        const maxWidth = 800; // Limite seguro para localStorage
+        
+        if (width > maxWidth) {
+          height = (height * maxWidth) / width;
+          width = maxWidth;
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.7)); // Compressão 70%
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+};
 
 export const AdminView: React.FC = () => {
   const { config, updateConfig, resetConfig } = useAppConfig();
+  
+  // --- ONBOARDING STATE ---
+  const [setupName, setSetupName] = useState('');
+  const [setupPhone, setSetupPhone] = useState('');
+  const [setupStep, setSetupStep] = useState<'form' | 'processing'>('form');
+  const [loadingMsg, setLoadingMsg] = useState('Iniciando sistema...');
+  // -----------------------
+
   const [tempConfig, setTempConfig] = useState<AppConfig>(config);
   const [saved, setSaved] = useState(false);
   
-  // State para controle do Wizard de Serviços
-  const [expandedServiceId, setExpandedServiceId] = useState<string | null>(null);
-  const [editingStep, setEditingStep] = useState<number>(1);
-  const wizardRef = useRef<HTMLDivElement>(null);
+  // Controle de Navegação Interna do Admin
+  const [viewMode, setViewMode] = useState<'dashboard' | 'editor'>('dashboard');
+  const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (expandedServiceId && wizardRef.current) {
-      wizardRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }
-  }, [editingStep, expandedServiceId]);
+  // Estado para controlar qual seção está expandida.
+  const [expandedSection, setExpandedSection] = useState<string | null>('profile');
+
+  const toggleSection = (section: string) => {
+    setExpandedSection(prev => prev === section ? null : section);
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setTempConfig(prev => ({ ...prev, [name]: value }));
+    
+    // Aplica máscara se for campo de telefone
+    if (name === 'phone') {
+        setTempConfig(prev => ({ ...prev, [name]: formatPhone(value) }));
+    } else {
+        setTempConfig(prev => ({ ...prev, [name]: value }));
+    }
     setSaved(false);
   };
 
-  // --- Lógica de Serviços ---
-
-  const handleServiceChange = (index: number, field: keyof ServiceDetailData, value: any) => {
-    const updatedServices = [...tempConfig.services];
-    updatedServices[index] = { ...updatedServices[index], [field]: value };
-    setTempConfig(prev => ({ ...prev, services: updatedServices }));
-    setSaved(false);
-  };
-
-  // Tratamento especial para benefícios (array de strings) via textarea
-  const handleBenefitsChange = (index: number, text: string) => {
-    const benefitsArray = text.split('\n');
-    handleServiceChange(index, 'benefits', benefitsArray);
-  };
-
-  const handleFileUpload = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleProfileImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        handleServiceChange(index, 'image', reader.result as string);
-      };
-      reader.readAsDataURL(file);
+      try {
+        const compressedImage = await resizeImage(file);
+        setTempConfig(prev => ({ ...prev, profileImage: compressedImage }));
+        setSaved(false);
+      } catch (err) {
+        console.error("Erro ao processar imagem de perfil", err);
+        alert("Erro ao carregar imagem.");
+      }
     }
   };
 
-  const handleAddService = () => {
-    const newId = `custom-${Date.now()}`;
-    const newService: ServiceDetailData = {
-      id: newId,
-      title: "Novo Plano",
-      description: "Descrição curta para o card.",
-      fullDescription: "Descrição completa e persuasiva sobre este serviço.",
-      image: "https://placehold.co/600x400?text=Novo+Plano",
-      tag: "NOVIDADE",
-      tagColor: "blue",
-      popular: false,
-      benefits: ["Benefício 1", "Benefício 2", "Benefício 3"],
-      duration: "A combinar",
-      location: "Domiciliar"
-    };
+  const handleHeroImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      try {
+        const compressedImage = await resizeImage(file);
+        setTempConfig(prev => ({ ...prev, heroImage: compressedImage }));
+        setSaved(false);
+      } catch (err) {
+        console.error("Erro ao processar imagem de capa", err);
+        alert("Erro ao carregar imagem.");
+      }
+    }
+  };
 
-    setTempConfig(prev => ({
-      ...prev,
-      services: [...prev.services, newService]
-    }));
-    
-    // Abre o novo serviço imediatamente no passo 1
-    setExpandedServiceId(newId);
-    setEditingStep(1);
-    setSaved(false);
+  const openEditor = (serviceId?: string) => {
+    setEditingServiceId(serviceId || null);
+    setViewMode('editor');
+  };
+
+  const closeEditor = () => {
+    setViewMode('dashboard');
+    setEditingServiceId(null);
+  };
+
+  const handleSaveService = (updatedService: ServiceDetailData) => {
+    const newServices = tempConfig.services.map(s => s.id === updatedService.id ? updatedService : s);
+    if (!tempConfig.services.find(s => s.id === updatedService.id)) {
+        newServices.push(updatedService);
+    }
+    const newConfig = { ...tempConfig, services: newServices };
+    setTempConfig(newConfig);
+    updateConfig(newConfig);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+    closeEditor();
   };
 
   const handleDeleteService = (id: string) => {
     if (window.confirm("Tem certeza que deseja excluir este plano permanentemente?")) {
-      setTempConfig(prev => ({
-        ...prev,
-        services: prev.services.filter(s => s.id !== id)
-      }));
-      if (expandedServiceId === id) setExpandedServiceId(null);
+      const newConfig = {
+        ...tempConfig,
+        services: tempConfig.services.filter(s => s.id !== id)
+      };
+      setTempConfig(newConfig);
+      updateConfig(newConfig);
       setSaved(false);
+      closeEditor();
     }
   };
 
-  const toggleService = (id: string) => {
-    if (expandedServiceId === id) {
-      setExpandedServiceId(null);
-    } else {
-      setExpandedServiceId(id);
-      setEditingStep(1); // Sempre reseta para o passo 1 ao abrir
-    }
-  };
-
-  const handleSave = () => {
+  const handleGlobalSave = () => {
+    // Remove formatação do telefone antes de salvar para garantir consistência se necessário,
+    // mas aqui salvaremos com formato para exibição visual nos inputs.
+    // O link do WhatsApp remove caracteres não numéricos.
     updateConfig(tempConfig);
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
   };
 
-  // --- Renderização dos Passos do Wizard ---
-
-  const renderStepIndicator = () => (
-    <div className="flex items-center justify-between mb-6 px-4 relative">
-      {/* Linha de conexão */}
-      <div className="absolute left-4 right-4 top-4 h-0.5 bg-slate-100 -z-0">
-         <div 
-            className={`h-full bg-${tempConfig.themeColor}-500 transition-all duration-300`} 
-            style={{ width: `${((editingStep - 1) / 2) * 100}%` }}
-         ></div>
-      </div>
-
-      {[1, 2, 3].map((step) => (
-        <div key={step} className="flex flex-col items-center relative z-10 cursor-pointer" onClick={() => setEditingStep(step)}>
-          <div 
-            className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 ${
-              editingStep >= step 
-                ? `bg-${tempConfig.themeColor}-500 text-white shadow-lg transform scale-110` 
-                : 'bg-white border-2 border-slate-100 text-slate-300'
-            }`}
-          >
-            {step}
-          </div>
-          <span className={`text-[9px] mt-1.5 font-bold uppercase tracking-wider ${editingStep >= step ? 'text-slate-800' : 'text-slate-300'}`}>
-            {step === 1 ? 'Identidade' : step === 2 ? 'Conteúdo' : 'Detalhes'}
-          </span>
+  const SectionHeader = ({ id, title, icon: Icon, colorClass }: { id: string, title: string, icon: any, colorClass: string }) => (
+    <button 
+        onClick={() => toggleSection(id)}
+        className={`w-full flex items-center justify-between p-5 bg-white ${expandedSection === id ? 'rounded-t-3xl border-b border-slate-50' : 'rounded-3xl hover:bg-slate-50'} transition-all shadow-sm border border-slate-100 mb-1 z-10 relative`}
+    >
+        <div className="flex items-center gap-3">
+            <div className={`p-2 rounded-xl ${colorClass} bg-opacity-10`}>
+                <Icon size={20} className={colorClass.replace('bg-', 'text-')} />
+            </div>
+            <span className="font-bold text-slate-800 text-sm">{title}</span>
         </div>
-      ))}
-    </div>
+        <div className={`text-slate-400 transition-transform duration-300 ${expandedSection === id ? 'rotate-180' : ''}`}>
+            <ChevronDown size={20} />
+        </div>
+    </button>
   );
 
+  // --- LOGICA DE SETUP INICIAL (ONBOARDING) ---
+  const handleStartSetup = () => {
+    if(!setupName || !setupPhone) {
+        alert("Por favor, preencha seu nome e WhatsApp.");
+        return;
+    }
+    setSetupStep('processing');
+  };
+
+  // Efeito para animação de loading do setup
+  useEffect(() => {
+    if (setupStep === 'processing') {
+        const messages = [
+            "Conectando ao servidor...",
+            "Criando perfil profissional...",
+            `Configurando conta de ${setupName}...`,
+            "Vinculando WhatsApp...",
+            "Gerando painel administrativo...",
+            "Aplicando tema visual...",
+            "Finalizando configuração..."
+        ];
+        
+        let i = 0;
+        const interval = setInterval(() => {
+            if (i < messages.length) {
+                setLoadingMsg(messages[i]);
+                i++;
+            } else {
+                clearInterval(interval);
+                // FINALIZA SETUP
+                updateConfig({
+                    professionalName: setupName,
+                    phone: setupPhone.replace(/\D/g, ''), // Salva limpo no config global
+                    isOnboarded: true
+                });
+                setTempConfig(prev => ({
+                    ...prev,
+                    professionalName: setupName,
+                    phone: setupPhone, // Mantém formatado no input local
+                    isOnboarded: true
+                }));
+            }
+        }, 800); // Velocidade da troca de mensagens
+
+        return () => clearInterval(interval);
+    }
+  }, [setupStep]);
+
+  // RENDERIZAÇÃO DO SETUP SE NÃO TIVER FEITO ONBOARDING
+  if (!config.isOnboarded) {
+    if (setupStep === 'form') {
+        return (
+            <div className="fixed inset-0 z-50 bg-slate-900 flex flex-col items-center justify-center p-8 animate-fade-in">
+                <div className="w-full max-w-md">
+                    <div className="text-center mb-10">
+                        <div className="w-20 h-20 bg-gradient-to-tr from-blue-500 to-purple-600 rounded-3xl mx-auto flex items-center justify-center mb-6 shadow-2xl shadow-blue-500/20 animate-bounce-slow">
+                            <Sparkles size={40} className="text-white" />
+                        </div>
+                        <h1 className="text-3xl font-bold text-white font-brand mb-2">Bem-vindo, Treinador!</h1>
+                        <p className="text-slate-400 text-sm">Vamos configurar seu aplicativo em segundos.</p>
+                    </div>
+
+                    <div className="space-y-5 bg-white/5 p-6 rounded-3xl border border-white/10 backdrop-blur-sm">
+                        <div>
+                            <label className="text-xs font-bold text-blue-400 uppercase ml-1 mb-1 block">Como você quer ser chamado?</label>
+                            <div className="relative">
+                                <User className="absolute left-4 top-3.5 text-slate-500" size={18} />
+                                <input 
+                                    value={setupName}
+                                    onChange={(e) => setSetupName(e.target.value)}
+                                    placeholder="Ex: Carlos Adestrador"
+                                    className="w-full bg-slate-800 border border-slate-700 rounded-xl pl-11 pr-4 py-3.5 text-white font-bold placeholder:text-slate-600 focus:outline-none focus:border-blue-500 transition-colors"
+                                />
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="text-xs font-bold text-green-400 uppercase ml-1 mb-1 block">Seu WhatsApp (Com DDD)</label>
+                            <div className="relative">
+                                <Smartphone className="absolute left-4 top-3.5 text-slate-500" size={18} />
+                                <input 
+                                    value={setupPhone}
+                                    onChange={(e) => setSetupPhone(formatPhone(e.target.value))}
+                                    type="tel"
+                                    placeholder="(11) 99999-9999"
+                                    className="w-full bg-slate-800 border border-slate-700 rounded-xl pl-11 pr-4 py-3.5 text-white font-bold placeholder:text-slate-600 focus:outline-none focus:border-green-500 transition-colors"
+                                />
+                            </div>
+                        </div>
+
+                        <button 
+                            onClick={handleStartSetup}
+                            className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-600/30 active:scale-95 transition-all flex items-center justify-center gap-2 mt-4 hover:shadow-blue-600/50"
+                        >
+                            <Zap size={20} fill="currentColor" />
+                            Configurar Sistema Agora
+                        </button>
+                    </div>
+                    
+                    <p className="text-center text-[10px] text-slate-600 mt-8">Configuração segura e local. Seus dados ficam no seu dispositivo.</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (setupStep === 'processing') {
+        return (
+            <div className="fixed inset-0 z-50 bg-slate-900 flex flex-col items-center justify-center p-8">
+                <div className="relative mb-8">
+                    <div className="absolute inset-0 bg-blue-500 blur-3xl opacity-20 rounded-full animate-pulse"></div>
+                    <div className="relative z-10 w-24 h-24 bg-slate-800 rounded-full border-4 border-slate-700 flex items-center justify-center">
+                        <Loader2 size={48} className="text-blue-500 animate-spin" />
+                    </div>
+                    {/* Icones orbitando (efeito visual) */}
+                    <div className="absolute top-0 right-0 -mt-2 -mr-2 bg-slate-700 p-2 rounded-full animate-bounce">
+                        <Server size={14} className="text-green-400" />
+                    </div>
+                    <div className="absolute bottom-0 left-0 -mb-2 -ml-2 bg-slate-700 p-2 rounded-full animate-bounce delay-100">
+                        <Database size={14} className="text-purple-400" />
+                    </div>
+                </div>
+
+                <h2 className="text-2xl font-bold text-white mb-2 font-brand animate-pulse">{loadingMsg}</h2>
+                
+                {/* Progress Bar Falso */}
+                <div className="w-64 h-1.5 bg-slate-800 rounded-full overflow-hidden mt-4">
+                    <div className="h-full bg-gradient-to-r from-blue-500 via-purple-500 to-blue-500 w-full animate-progress origin-left"></div>
+                </div>
+            </div>
+        );
+    }
+  }
+
+  // --- FIM DA LÓGICA DE ONBOARDING ---
+
+  // Se estiver no modo Editor, renderiza a View de Edição
+  if (viewMode === 'editor') {
+    const serviceToEdit = tempConfig.services.find(s => s.id === editingServiceId);
+    return (
+      <ServiceEditorView 
+        initialService={serviceToEdit}
+        onSave={handleSaveService}
+        onCancel={closeEditor}
+        onDelete={handleDeleteService}
+      />
+    );
+  }
+
+  // Modo Dashboard (Lista Principal - PÓS ONBOARDING)
   return (
-    <div className="bg-slate-50 min-h-full pb-24 animate-fade-in">
+    <div className="bg-slate-50 min-h-full pb-24 animate-fade-in relative">
       
       {/* Header Admin */}
       <div className="bg-slate-900 pt-8 pb-10 px-6 rounded-b-[2.5rem] relative overflow-hidden shadow-xl mb-6">
@@ -151,384 +332,242 @@ export const AdminView: React.FC = () => {
         </div>
       </div>
 
-      <div className="px-6 -mt-6 relative z-20 space-y-6">
+      <div className="px-6 -mt-6 relative z-20 space-y-4">
         
-        {/* Card 1: Identidade */}
-        <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-            <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
-                <User size={18} className={`text-${tempConfig.themeColor}-500`} />
-                Identidade Visual
-            </h3>
-            <div className="space-y-4">
-                <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Seu Nome Profissional</label>
-                    <input 
-                        name="professionalName"
-                        value={tempConfig.professionalName}
-                        onChange={handleChange}
-                        className={`w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 focus:outline-none focus:border-${tempConfig.themeColor}-500`}
-                    />
-                </div>
-                <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Slogan / Cargo</label>
-                    <input 
-                        name="slogan"
-                        value={tempConfig.slogan}
-                        onChange={handleChange}
-                        className={`w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 focus:outline-none focus:border-${tempConfig.themeColor}-500`}
-                    />
-                </div>
-                <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">URL da Foto de Perfil</label>
-                    <input 
-                        name="profileImage"
-                        value={tempConfig.profileImage}
-                        onChange={handleChange}
-                        placeholder="https://..."
-                        className={`w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-600 focus:outline-none focus:border-${tempConfig.themeColor}-500`}
-                    />
-                </div>
-            </div>
-        </div>
-
-        {/* Card 2: Serviços (WIZARD) */}
-        <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                  <Briefcase size={18} className="text-blue-500" />
-                  Seus Planos
-              </h3>
-              <button 
-                onClick={handleAddService}
-                className={`text-[10px] font-bold bg-${tempConfig.themeColor}-50 text-${tempConfig.themeColor}-600 px-3 py-1.5 rounded-lg flex items-center gap-1 hover:bg-${tempConfig.themeColor}-100 transition-colors shadow-sm`}
-              >
-                <Plus size={12} /> Criar Plano
-              </button>
-            </div>
+        {/* SEÇÃO 1: DADOS DO PROFISSIONAL */}
+        <div className={`transition-all duration-300 ${expandedSection === 'profile' ? 'mb-4' : ''}`}>
+            <SectionHeader id="profile" title="Dados do Profissional" icon={User} colorClass="bg-blue-500" />
             
-            <div className="space-y-3">
-              {tempConfig.services.map((service, index) => (
-                <div key={service.id} className={`border rounded-xl overflow-hidden transition-all duration-300 ${expandedServiceId === service.id ? `border-${tempConfig.themeColor}-200 shadow-md ring-1 ring-${tempConfig.themeColor}-100` : 'border-slate-100 bg-slate-50/50'}`}>
-                  
-                  {/* Service Header / Toggle */}
-                  <div 
-                    onClick={() => toggleService(service.id)}
-                    className="p-4 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg overflow-hidden border border-slate-200 bg-white shrink-0 relative">
-                         <img src={service.image} alt="ico" className="w-full h-full object-cover" />
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-bold text-slate-800 line-clamp-1">{service.title}</h4>
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${service.tagColor ? `text-${service.tagColor}-600 bg-${service.tagColor}-50 border-${service.tagColor}-100` : 'text-slate-500 bg-slate-100 border-slate-200'}`}>
-                          {service.tag}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {expandedServiceId === service.id ? <ChevronUp size={18} className="text-slate-400" /> : <Edit2 size={16} className="text-slate-400" />}
-                    </div>
-                  </div>
-
-                  {/* Service Wizard Form (Expandable) */}
-                  {expandedServiceId === service.id && (
-                    <div ref={wizardRef} className="p-5 border-t border-slate-100 bg-white animate-fade-in relative">
-                      
-                      {renderStepIndicator()}
-
-                      {/* STEP 1: IDENTIDADE */}
-                      {editingStep === 1 && (
-                        <div className="space-y-4 animate-slide-in">
-                          <div>
-                            <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Título do Plano</label>
+            {expandedSection === 'profile' && (
+                <div className="bg-white p-6 rounded-b-3xl border-x border-b border-slate-100 shadow-sm animate-fade-in -mt-2 pt-4">
+                    <div className="space-y-4">
+                        <div>
+                            <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Seu Nome Profissional</label>
                             <input 
-                              value={service.title}
-                              onChange={(e) => handleServiceChange(index, 'title', e.target.value)}
-                              className={`w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold text-slate-900 focus:outline-none focus:border-${tempConfig.themeColor}-500`}
-                              placeholder="Ex: Adestramento Básico"
+                                name="professionalName"
+                                value={tempConfig.professionalName}
+                                onChange={handleChange}
+                                placeholder="Ex: Carlos Adestrador"
+                                className={`w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 focus:outline-none focus:border-${tempConfig.themeColor}-500`}
                             />
-                          </div>
-                          
-                          <div className="grid grid-cols-2 gap-3">
-                             <div>
-                                <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Etiqueta (Tag)</label>
-                                <input 
-                                  value={service.tag}
-                                  onChange={(e) => handleServiceChange(index, 'tag', e.target.value)}
-                                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:border-${tempConfig.themeColor}-500"
-                                  placeholder="Ex: POPULAR"
-                                />
-                             </div>
-                             <div>
-                                <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Cor da Tag</label>
-                                <select 
-                                  value={service.tagColor}
-                                  onChange={(e) => handleServiceChange(index, 'tagColor', e.target.value)}
-                                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:border-${tempConfig.themeColor}-500"
-                                >
-                                  <option value="orange">Laranja</option>
-                                  <option value="blue">Azul</option>
-                                  <option value="green">Verde</option>
-                                  <option value="purple">Roxo</option>
-                                  <option value="slate">Cinza</option>
-                                </select>
-                             </div>
-                          </div>
-
-                          <div className="flex items-center gap-2 pt-2 bg-slate-50 p-2 rounded-lg border border-slate-100">
-                             <input 
-                               type="checkbox"
-                               id={`pop-${service.id}`}
-                               checked={service.popular || false}
-                               onChange={(e) => handleServiceChange(index, 'popular', e.target.checked)}
-                               className={`w-4 h-4 text-${tempConfig.themeColor}-500 rounded focus:ring-${tempConfig.themeColor}-500`}
-                             />
-                             <label htmlFor={`pop-${service.id}`} className="text-xs font-bold text-slate-600 flex items-center gap-1 cursor-pointer">
-                                Marcar como Destaque (Popular)
-                             </label>
-                          </div>
                         </div>
-                      )}
-
-                      {/* STEP 2: CONTEÚDO (Com Seletor de Imagem Melhorado) */}
-                      {editingStep === 2 && (
-                        <div className="space-y-4 animate-slide-in">
-                          <div>
-                            <label className="text-[10px] font-bold text-slate-400 uppercase ml-1 flex items-center gap-1"><AlignLeft size={10}/> Descrição Curta (Card)</label>
+                        <div>
+                            <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Slogan / Cargo</label>
                             <input 
-                              value={service.description}
-                              onChange={(e) => handleServiceChange(index, 'description', e.target.value)}
-                              className={`w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-${tempConfig.themeColor}-500`}
-                              placeholder="Ex: Comandos essenciais e foco."
+                                name="slogan"
+                                value={tempConfig.slogan}
+                                onChange={handleChange}
+                                placeholder="Ex: Adestramento Comportamental"
+                                className={`w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 focus:outline-none focus:border-${tempConfig.themeColor}-500`}
                             />
-                          </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
 
-                          <div>
-                            <label className="text-[10px] font-bold text-slate-400 uppercase ml-1 flex items-center gap-1"><AlignLeft size={10}/> Descrição Completa</label>
-                            <textarea 
-                              rows={3}
-                              value={service.fullDescription}
-                              onChange={(e) => handleServiceChange(index, 'fullDescription', e.target.value)}
-                              className={`w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-${tempConfig.themeColor}-500 resize-none`}
-                              placeholder="Texto detalhado..."
-                            />
-                          </div>
+        {/* SEÇÃO 2: IMAGENS & VISUAL */}
+        <div className={`transition-all duration-300 ${expandedSection === 'images' ? 'mb-4' : ''}`}>
+            <SectionHeader id="images" title="Imagens & Identidade" icon={ImageIcon} colorClass="bg-purple-500" />
+            
+            {expandedSection === 'images' && (
+                <div className="bg-white p-6 rounded-b-3xl border-x border-b border-slate-100 shadow-sm animate-fade-in -mt-2 pt-4">
+                    <div className="space-y-6">
+                        {/* Upload Foto Perfil */}
+                        <div className="flex items-center gap-4 border-b border-slate-50 pb-4">
+                            <div className="relative group cursor-pointer">
+                                <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-slate-200 bg-slate-100">
+                                    <img src={tempConfig.profileImage} alt="Profile" className="w-full h-full object-cover" />
+                                </div>
+                                <label htmlFor="profile-upload" className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                                    <Camera size={20} className="text-white" />
+                                </label>
+                                <input 
+                                    type="file" 
+                                    id="profile-upload" 
+                                    accept="image/*" 
+                                    className="hidden" 
+                                    onChange={handleProfileImageUpload}
+                                />
+                            </div>
+                            <div className="flex-1">
+                                <label htmlFor="profile-upload" className="block text-xs font-bold text-slate-700 mb-0.5 cursor-pointer hover:underline">
+                                    Foto de Perfil
+                                </label>
+                                <p className="text-[10px] text-slate-400 leading-tight">Aparece na página de contato e topo.</p>
+                            </div>
+                        </div>
 
-                          {/* Seletor de Imagem Aprimorado */}
-                          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                            <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 flex items-center gap-1">
-                               <ImageIcon size={12}/> Imagem de Capa
-                            </label>
-                            
-                            {/* Preview */}
-                            <div className="relative h-32 w-full rounded-lg overflow-hidden bg-slate-200 mb-3 border border-slate-200 shadow-inner">
-                                <img src={service.image} className="w-full h-full object-cover" alt="Preview" />
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent flex items-end p-2">
-                                    <span className="text-[10px] text-white font-bold bg-black/30 px-2 py-1 rounded backdrop-blur-sm">Atual</span>
+                        {/* Upload Hero Image & Gallery */}
+                        <div>
+                            <div className="flex items-center gap-4 mb-3">
+                                <div className="relative group cursor-pointer w-24 h-14 rounded-lg overflow-hidden border-2 border-slate-200 bg-slate-100 shrink-0">
+                                    <img src={tempConfig.heroImage} alt="Hero" className="w-full h-full object-cover" />
+                                    <label htmlFor="hero-upload" className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                                        <ImageIcon size={20} className="text-white" />
+                                    </label>
+                                    <input 
+                                        type="file" 
+                                        id="hero-upload" 
+                                        accept="image/*" 
+                                        className="hidden" 
+                                        onChange={handleHeroImageUpload}
+                                    />
+                                </div>
+                                <div className="flex-1">
+                                    <label htmlFor="hero-upload" className="block text-xs font-bold text-slate-700 mb-0.5 cursor-pointer hover:underline">
+                                        Capa Inicial (Hero)
+                                    </label>
+                                    <p className="text-[10px] text-slate-400 leading-tight">Destaque principal da página Início.</p>
                                 </div>
                             </div>
 
-                            {/* Image Source Options */}
-                            <div className="space-y-3">
-                                {/* Option 1: Gallery */}
-                                <div>
-                                    <p className="text-[9px] font-bold text-slate-400 uppercase mb-1 flex items-center gap-1"><Grid size={10}/> Sugestões (Clique para selecionar)</p>
-                                    <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
-                                        {SERVICE_IMAGES_GALLERY.map((img, idx) => (
-                                            <button 
-                                                key={idx}
-                                                onClick={() => handleServiceChange(index, 'image', img.img_full)} // Using full image for quality
-                                                className={`flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${service.image === img.img_full ? `border-${tempConfig.themeColor}-500 ring-2 ring-${tempConfig.themeColor}-200` : 'border-slate-200 hover:border-slate-400'}`}
-                                            >
-                                                <img src={img.img_thumb} className="w-full h-full object-cover" alt={`Opção ${idx}`} />
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                <div className="flex gap-2 items-center">
-                                    <div className="h-px bg-slate-200 flex-1"></div>
-                                    <span className="text-[9px] text-slate-400 font-bold uppercase">Ou</span>
-                                    <div className="h-px bg-slate-200 flex-1"></div>
-                                </div>
-
-                                {/* Option 2 & 3: Upload or URL */}
-                                <div className="grid grid-cols-1 gap-2">
-                                    <div className="relative">
-                                        <input 
-                                            type="file" 
-                                            id={`upload-${index}`}
-                                            accept="image/*"
-                                            className="hidden" 
-                                            onChange={(e) => handleFileUpload(index, e)}
-                                        />
-                                        <label 
-                                            htmlFor={`upload-${index}`}
-                                            className={`w-full flex items-center justify-center gap-2 bg-white border border-slate-200 text-slate-600 text-xs font-bold py-2 rounded-lg cursor-pointer hover:bg-slate-50 transition-colors`}
+                            {/* Galeria Rápida Hero */}
+                            <div>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase mb-2 flex items-center gap-1"><Grid size={10}/> Galeria Rápida:</p>
+                                <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
+                                    {HERO_IMAGES_GALLERY.map((img, idx) => (
+                                        <button 
+                                            key={idx}
+                                            onClick={() => {
+                                                setTempConfig(prev => ({ ...prev, heroImage: img.img_full }));
+                                                setSaved(false);
+                                            }}
+                                            className={`flex-shrink-0 w-20 h-12 rounded-lg overflow-hidden border-2 transition-all ${tempConfig.heroImage === img.img_full ? `border-${tempConfig.themeColor}-500 ring-2 ring-${tempConfig.themeColor}-200` : 'border-slate-100 hover:border-slate-300'}`}
                                         >
-                                            <Upload size={14} /> Fazer Upload (Dispositivo)
-                                        </label>
-                                    </div>
-                                    <div className="relative">
-                                        <LinkIcon size={14} className="absolute left-3 top-2.5 text-slate-400" />
-                                        <input 
-                                          value={service.image.startsWith('data:') ? '' : service.image}
-                                          onChange={(e) => handleServiceChange(index, 'image', e.target.value)}
-                                          className={`w-full bg-white border border-slate-200 rounded-lg pl-9 pr-3 py-2 text-xs text-slate-600 focus:outline-none focus:border-${tempConfig.themeColor}-500`}
-                                          placeholder="Colar URL da imagem..."
-                                        />
-                                    </div>
+                                            <img src={img.img_thumb} className="w-full h-full object-cover" alt={`Opção ${idx}`} />
+                                        </button>
+                                    ))}
                                 </div>
                             </div>
-                          </div>
                         </div>
-                      )}
-
-                      {/* STEP 3: DETALHES */}
-                      {editingStep === 3 && (
-                        <div className="space-y-4 animate-slide-in">
-                           <div className="grid grid-cols-2 gap-3">
-                             <div>
-                                <label className="text-[10px] font-bold text-slate-400 uppercase ml-1 flex items-center gap-1"><Clock size={10}/> Duração/Preço</label>
-                                <input 
-                                  value={service.duration}
-                                  onChange={(e) => handleServiceChange(index, 'duration', e.target.value)}
-                                  className={`w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:border-${tempConfig.themeColor}-500`}
-                                  placeholder="Ex: 8 aulas"
-                                />
-                             </div>
-                             <div>
-                                <label className="text-[10px] font-bold text-slate-400 uppercase ml-1 flex items-center gap-1"><MapPin size={10}/> Local</label>
-                                <input 
-                                  value={service.location}
-                                  onChange={(e) => handleServiceChange(index, 'location', e.target.value)}
-                                  className={`w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:border-${tempConfig.themeColor}-500`}
-                                  placeholder="Ex: Domicílio"
-                                />
-                             </div>
-                          </div>
-
-                          <div>
-                            <label className="text-[10px] font-bold text-slate-400 uppercase ml-1 flex items-center gap-1"><List size={10}/> Benefícios (Um por linha)</label>
-                            <textarea 
-                              rows={5}
-                              value={service.benefits.join('\n')}
-                              onChange={(e) => handleBenefitsChange(index, e.target.value)}
-                              className={`w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-${tempConfig.themeColor}-500 resize-none leading-relaxed`}
-                              placeholder="Adicione um benefício por linha..."
-                            />
-                            <p className="text-[9px] text-slate-400 mt-1 pl-1">Cada linha será um item com <CheckSquare size={8} className="inline"/> na lista.</p>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Wizard Footer Navigation */}
-                      <div className="flex items-center justify-between pt-4 mt-2 border-t border-slate-50">
-                         {editingStep === 1 ? (
-                            <button 
-                                onClick={() => handleDeleteService(service.id)}
-                                className="text-red-400 hover:text-red-600 text-xs font-bold flex items-center gap-1 px-2 py-1"
-                            >
-                                <Trash2 size={14} /> Excluir
-                            </button>
-                         ) : (
-                            <button 
-                                onClick={() => setEditingStep(prev => prev - 1)}
-                                className="text-slate-400 hover:text-slate-600 text-xs font-bold flex items-center gap-1 px-2 py-1"
-                            >
-                                <ArrowLeft size={14} /> Voltar
-                            </button>
-                         )}
-
-                         {editingStep < 3 ? (
-                            <button 
-                                onClick={() => setEditingStep(prev => prev + 1)}
-                                className={`bg-slate-900 text-white text-xs font-bold px-4 py-2 rounded-lg flex items-center gap-1 active:scale-95 transition shadow-sm`}
-                            >
-                                Próximo <ArrowRight size={14} />
-                            </button>
-                         ) : (
-                            <div className="text-xs font-bold text-green-500 flex items-center gap-1 px-2">
-                                <CheckSquare size={14} /> Tudo Pronto
-                            </div>
-                         )}
-                      </div>
-
                     </div>
-                  )}
                 </div>
-              ))}
-            </div>
-            <p className="text-[10px] text-center text-slate-400 mt-4">Salve as alterações para aplicar no App.</p>
+            )}
         </div>
 
-        {/* Card 3: Aparência */}
-        <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-            <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
-                <Palette size={18} className="text-purple-500" />
-                Tema do App
-            </h3>
-            <div className="grid grid-cols-4 gap-2">
-                {['orange', 'blue', 'green', 'purple'].map((color) => (
-                    <button
-                        key={color}
-                        onClick={() => setTempConfig(prev => ({ ...prev, themeColor: color as any }))}
-                        className={`h-12 rounded-xl border-2 transition-all flex items-center justify-center ${
-                            tempConfig.themeColor === color 
-                            ? `border-${color}-500 bg-${color}-50 ring-2 ring-${color}-200` 
-                            : 'border-slate-100 bg-slate-50'
-                        }`}
-                    >
-                        <div className={`w-6 h-6 rounded-full bg-${color}-500`}></div>
-                    </button>
-                ))}
-            </div>
-            <p className="text-[10px] text-slate-400 mt-2 text-center">Cor selecionada: <span className="uppercase font-bold">{tempConfig.themeColor}</span></p>
+        {/* SEÇÃO 3: PLANOS E SERVIÇOS */}
+        <div className={`transition-all duration-300 ${expandedSection === 'services' ? 'mb-4' : ''}`}>
+            <SectionHeader id="services" title="Seus Planos e Serviços" icon={Briefcase} colorClass="bg-orange-500" />
+            
+            {expandedSection === 'services' && (
+                <div className="bg-white p-6 rounded-b-3xl border-x border-b border-slate-100 shadow-sm animate-fade-in -mt-2 pt-4">
+                    <div className="flex items-center justify-between mb-4">
+                        <p className="text-xs text-slate-400">Gerencie os serviços oferecidos.</p>
+                        <button 
+                            onClick={() => openEditor()}
+                            className={`text-[10px] font-bold bg-${tempConfig.themeColor}-50 text-${tempConfig.themeColor}-600 px-3 py-1.5 rounded-lg flex items-center gap-1 hover:bg-${tempConfig.themeColor}-100 transition-colors shadow-sm`}
+                        >
+                            <Plus size={12} /> Novo
+                        </button>
+                    </div>
+                    
+                    <div className="space-y-3">
+                    {tempConfig.services.map((service) => (
+                        <div 
+                            key={service.id} 
+                            onClick={() => openEditor(service.id)}
+                            className="flex items-center justify-between p-3 rounded-xl border border-slate-100 bg-slate-50 hover:border-slate-300 hover:bg-white transition-all cursor-pointer group"
+                        >
+                            <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-lg overflow-hidden border border-slate-200 bg-white shrink-0">
+                                <img src={service.image} alt="ico" className="w-full h-full object-cover" />
+                            </div>
+                            <div>
+                                <h4 className="text-sm font-bold text-slate-800 line-clamp-1">{service.title}</h4>
+                                <div className="flex gap-2">
+                                    <span className={`text-[9px] font-bold text-${service.tagColor || 'slate'}-500`}>{service.tag}</span>
+                                    {service.popular && <span className="text-[9px] font-bold text-orange-500">★ Popular</span>}
+                                </div>
+                            </div>
+                            </div>
+                            <div className="bg-white p-2 rounded-full border border-slate-100 text-slate-300 group-hover:text-blue-500 group-hover:border-blue-200 transition-colors">
+                                <Edit2 size={14} />
+                            </div>
+                        </div>
+                    ))}
+                    
+                    {tempConfig.services.length === 0 && (
+                        <div className="text-center py-6 text-slate-400 text-xs">
+                            Nenhum plano cadastrado. Clique em "Novo" para começar.
+                        </div>
+                    )}
+                    </div>
+                </div>
+            )}
         </div>
 
-        {/* Card 4: Contato */}
-        <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-            <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
-                <Smartphone size={18} className="text-green-500" />
-                Configurações de Contato
-            </h3>
-            <div className="space-y-4">
-                <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase ml-1 flex items-center gap-1"><Phone size={10}/> WhatsApp (Apenas números)</label>
-                    <input 
-                        name="phone"
-                        value={tempConfig.phone}
-                        onChange={handleChange}
-                        placeholder="5511999999999"
-                        className={`w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 focus:outline-none focus:border-${tempConfig.themeColor}-500`}
-                    />
+        {/* SEÇÃO 4: CONTATO E LOCALIZAÇÃO */}
+        <div className={`transition-all duration-300 ${expandedSection === 'contact' ? 'mb-4' : ''}`}>
+            <SectionHeader id="contact" title="Contato e Local" icon={Smartphone} colorClass="bg-green-500" />
+            
+            {expandedSection === 'contact' && (
+                <div className="bg-white p-6 rounded-b-3xl border-x border-b border-slate-100 shadow-sm animate-fade-in -mt-2 pt-4">
+                    <div className="space-y-4">
+                        <div>
+                            <label className="text-[10px] font-bold text-slate-400 uppercase ml-1 flex items-center gap-1"><Phone size={10}/> WhatsApp (Apenas números)</label>
+                            <input 
+                                name="phone"
+                                value={tempConfig.phone}
+                                onChange={handleChange}
+                                placeholder="(11) 99999-9999"
+                                className={`w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 focus:outline-none focus:border-${tempConfig.themeColor}-500`}
+                            />
+                        </div>
+                        <div>
+                            <label className="text-[10px] font-bold text-slate-400 uppercase ml-1 flex items-center gap-1"><Instagram size={10}/> Link Instagram</label>
+                            <input 
+                                name="instagramUrl"
+                                value={tempConfig.instagramUrl}
+                                onChange={handleChange}
+                                className={`w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-700 focus:outline-none focus:border-${tempConfig.themeColor}-500`}
+                            />
+                        </div>
+                        <div>
+                            <label className="text-[10px] font-bold text-slate-400 uppercase ml-1 flex items-center gap-1"><MapPin size={10}/> Local de Atendimento</label>
+                            <input 
+                                name="locationText"
+                                value={tempConfig.locationText}
+                                onChange={handleChange}
+                                className={`w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-700 focus:outline-none focus:border-${tempConfig.themeColor}-500`}
+                            />
+                        </div>
+                    </div>
                 </div>
-                <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase ml-1 flex items-center gap-1"><Instagram size={10}/> Link Instagram</label>
-                    <input 
-                        name="instagramUrl"
-                        value={tempConfig.instagramUrl}
-                        onChange={handleChange}
-                        className={`w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-600 focus:outline-none focus:border-${tempConfig.themeColor}-500`}
-                    />
+            )}
+        </div>
+
+        {/* SEÇÃO 5: APARÊNCIA */}
+        <div className={`transition-all duration-300 ${expandedSection === 'theme' ? 'mb-4' : ''}`}>
+            <SectionHeader id="theme" title="Aparência do App" icon={Palette} colorClass="bg-pink-500" />
+            
+            {expandedSection === 'theme' && (
+                <div className="bg-white p-6 rounded-b-3xl border-x border-b border-slate-100 shadow-sm animate-fade-in -mt-2 pt-4">
+                    <p className="text-xs text-slate-400 mb-3">Escolha a cor principal do aplicativo:</p>
+                    <div className="grid grid-cols-4 gap-2">
+                        {['orange', 'blue', 'green', 'purple'].map((color) => (
+                            <button
+                                key={color}
+                                onClick={() => setTempConfig(prev => ({ ...prev, themeColor: color as any }))}
+                                className={`h-12 rounded-xl border-2 transition-all flex items-center justify-center ${
+                                    tempConfig.themeColor === color 
+                                    ? `border-${color}-500 bg-${color}-50 ring-2 ring-${color}-200` 
+                                    : 'border-slate-100 bg-slate-50'
+                                }`}
+                            >
+                                <div className={`w-6 h-6 rounded-full bg-${color}-500`}></div>
+                            </button>
+                        ))}
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-2 text-center">Cor selecionada: <span className="uppercase font-bold text-slate-600">{tempConfig.themeColor}</span></p>
                 </div>
-                <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase ml-1 flex items-center gap-1"><MapPin size={10}/> Local de Atendimento</label>
-                    <input 
-                        name="locationText"
-                        value={tempConfig.locationText}
-                        onChange={handleChange}
-                        className={`w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-600 focus:outline-none focus:border-${tempConfig.themeColor}-500`}
-                    />
-                </div>
-            </div>
+            )}
         </div>
 
         {/* Actions */}
-        <div className="pb-4 space-y-3">
+        <div className="pb-4 space-y-3 pt-4 border-t border-slate-100 mt-4">
             <button 
-                onClick={handleSave}
+                onClick={handleGlobalSave}
                 className={`w-full bg-slate-900 text-white font-bold py-4 rounded-xl shadow-lg active:scale-95 transition flex items-center justify-center gap-2`}
             >
                 <Save size={20} />

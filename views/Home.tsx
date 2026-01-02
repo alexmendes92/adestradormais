@@ -11,8 +11,8 @@ interface HomeProps {
 export const HomeView: React.FC<HomeProps> = ({ onNavigate, onServiceSelect }) => {
   const { config, themeClasses } = useAppConfig();
 
-  // Show the first 3 services as "Featured" on Home
-  const featuredServices = config.services.slice(0, 3);
+  // Show all services on Home
+  const featuredServices = config.services;
 
   return (
     <div className="animate-fade-in pb-6">
@@ -20,9 +20,9 @@ export const HomeView: React.FC<HomeProps> = ({ onNavigate, onServiceSelect }) =
       {/* Hero de Alta Conversão */}
       <div className="relative w-full h-96 rounded-b-[2.5rem] overflow-hidden shadow-lg mb-6 group">
         <img
-          alt="Parque"
+          alt="Capa Principal"
           className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-          src="https://santanamendes.com.br/imagens/Site_Adestrador/Site_Adestrador_d0_img0.png"
+          src={config.heroImage}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/60 to-transparent flex flex-col justify-end p-6">
           
@@ -136,9 +136,16 @@ export const HomeView: React.FC<HomeProps> = ({ onNavigate, onServiceSelect }) =
                       {isPopular && <span className={`text-[8px] font-bold bg-${config.themeColor}-500 text-white px-1.5 py-0.5 rounded`}>POPULAR</span>}
                    </div>
                    <p className="text-xs text-slate-500 mb-2 truncate">{service.description}</p>
-                   <span className={`text-[10px] font-bold px-2 py-1 rounded-md ${isPopular ? `text-${config.themeColor}-700 bg-white/50 border border-${config.themeColor}-200` : 'text-blue-600 bg-blue-50'}`}>
-                      {isPopular ? 'Consultar Agenda' : 'Saiba Mais'}
-                   </span>
+                   <div className="flex items-center gap-2">
+                       <span className={`text-[10px] font-bold px-2 py-1 rounded-md ${isPopular ? `text-${config.themeColor}-700 bg-white/50 border border-${config.themeColor}-200` : 'text-blue-600 bg-blue-50'}`}>
+                          {isPopular ? 'Consultar Agenda' : 'Saiba Mais'}
+                       </span>
+                       {service.price && (
+                           <span className="text-[10px] font-bold text-green-600 bg-green-50 px-2 py-1 rounded-md">
+                               {service.price}
+                           </span>
+                       )}
+                   </div>
                 </div>
                 {!isPopular && (
                   <div className="text-slate-300">

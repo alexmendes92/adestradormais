@@ -1,9 +1,20 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { MapPin, Download, Star, Award, ShieldCheck, Clock, MessageCircle, Instagram, Mail, Phone, CheckCircle2, Quote, Calendar } from 'lucide-react';
 import { useAppConfig } from '../contexts/AppConfigContext';
 
+// Utilitário para formatar telefone
+const formatPhone = (value: string) => {
+  const numbers = value.replace(/\D/g, '');
+  if (numbers.length <= 2) return numbers;
+  if (numbers.length <= 7) return `(${numbers.slice(0, 2)}) ${numbers.slice(2)}`;
+  return `(${numbers.slice(0, 2)}) ${numbers.slice(2, 7)}-${numbers.slice(7, 11)}`;
+};
+
 export const ContactView: React.FC = () => {
   const { config, themeClasses } = useAppConfig();
+  const [formName, setFormName] = useState('');
+  const [formPhone, setFormPhone] = useState('');
+  const [formMsg, setFormMsg] = useState('');
 
   const handleExportHtml = () => {
     const htmlContent = document.documentElement.outerHTML;
@@ -16,6 +27,12 @@ export const ContactView: React.FC = () => {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  };
+
+  const handleSendMessage = (e: React.FormEvent) => {
+      e.preventDefault();
+      const message = `Olá ${config.professionalName.split(' ')[0]}! 💬\n\nMeu nome é ${formName}.\nTel: ${formPhone}\n\nMensagem:\n${formMsg}`;
+      window.open(`https://wa.me/${config.phone}?text=${encodeURIComponent(message)}`, '_blank');
   };
 
   const reviews = [
@@ -208,26 +225,32 @@ export const ContactView: React.FC = () => {
               <Mail size={18} className={themeClasses.primaryText} />
               Envie uma mensagem
            </h3>
-           <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); alert('Em um SaaS real, isso enviaria um email!'); }}>
+           <form className="space-y-3" onSubmit={handleSendMessage}>
              <div className="relative">
                 <input 
                   className={`w-full pl-4 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-${config.themeColor}-500 focus:outline-none focus:bg-white transition-colors text-slate-900`}
                   placeholder="Seu Nome" 
+                  value={formName}
+                  onChange={(e) => setFormName(e.target.value)}
                   type="text" 
                 />
              </div>
              <div className="relative">
                 <input 
                   className={`w-full pl-4 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-${config.themeColor}-500 focus:outline-none focus:bg-white transition-colors text-slate-900`}
-                  placeholder="Seu WhatsApp" 
+                  placeholder="Seu WhatsApp (11) 99999-9999" 
                   type="tel" 
+                  value={formPhone}
+                  onChange={(e) => setFormPhone(formatPhone(e.target.value))}
                 />
              </div>
              <div className="relative">
                 <textarea 
                   className={`w-full pl-4 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:border-${config.themeColor}-500 focus:outline-none focus:bg-white transition-colors resize-none text-slate-900`}
                   placeholder="Como posso ajudar seu cão?" 
-                  rows={3} 
+                  rows={3}
+                  value={formMsg}
+                  onChange={(e) => setFormMsg(e.target.value)}
                 ></textarea>
              </div>
              <button 

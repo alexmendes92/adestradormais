@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { ArrowLeft, CheckCircle2, MessageCircle, Dog, Ruler, Search } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { ArrowLeft, CheckCircle2, MessageCircle, Dog, Ruler, Search, AlertCircle } from 'lucide-react';
 import { DogSize, ServiceDetailData } from '../types';
 import { BREEDS_DB } from '../breedsData';
 import { useAppConfig } from '../contexts/AppConfigContext';
@@ -15,6 +15,12 @@ export const ServiceDetailView: React.FC<ServiceDetailProps> = ({ service, onBac
   const [dogSize, setDogSize] = useState<DogSize>('');
   const [breed, setBreed] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
+  
+  // Estados de Validação
+  const [errors, setErrors] = useState({ name: false, size: false, breed: false });
+  
+  // Referência para scroll automático
+  const nameInputRef = useRef<HTMLInputElement>(null);
 
   // Filter breeds for autocomplete from BREEDS_DB
   const filteredBreeds = BREEDS_DB.filter(b => 
@@ -24,18 +30,46 @@ export const ServiceDetailView: React.FC<ServiceDetailProps> = ({ service, onBac
   const handleBreedSelect = (selectedBreedName: string) => {
     setBreed(selectedBreedName);
     setShowSuggestions(false);
+    setErrors(prev => ({ ...prev, breed: false }));
   };
 
   const handleWhatsAppClick = () => {
-    if (!dogName || !dogSize || !breed) {
-      alert("Por favor, preencha as informações do seu cão!");
+    // Reset errors
+    setErrors({ name: false, size: false, breed: false });
+
+    let hasError = false;
+    const newErrors = { name: false, size: false, breed: false };
+
+    if (!dogName.trim()) {
+        newErrors.name = true;
+        hasError = true;
+        // Scroll para o input de nome se estiver vazio
+        if (nameInputRef.current) {
+            nameInputRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            nameInputRef.current.focus();
+        }
+    }
+    
+    if (!dogSize) {
+        newErrors.size = true;
+        if (!hasError) hasError = true; // Mantém flag se já não tiver erro anterior
+    }
+
+    if (!breed.trim()) {
+        newErrors.breed = true;
+        if (!hasError) hasError = true;
+    }
+
+    setErrors(newErrors);
+
+    if (hasError) {
       return;
     }
 
     const sizeMap = { small: 'Pequeno', medium: 'Médio', large: 'Grande' };
     const text = `Olá ${config.professionalName.split(' ')[0]}! Gostaria de saber mais sobre o serviço *${service.title}*.\n\n🐶 *Meu Cão*\nNome: ${dogName}\nRaça: ${breed}\nPorte: ${sizeMap[dogSize] || 'Não informado'}`;
     
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+    window.open(`https://wa.me/${config.phone}?text=${encodeURIComponent(text)}`, '_blank');
   };
 
   return (
@@ -88,22 +122,35 @@ export const ServiceDetailView: React.FC<ServiceDetailProps> = ({ service, onBac
             
             {/* Name Input */}
             <div>
-              <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Nome do Cão</label>
+              <label className={`block text-xs font-bold uppercase mb-1 ${errors.name ? 'text-red-500' : 'text-slate-400'}`}>
+                  Nome do Cão {errors.name && '*'}
+              </label>
               <div className="relative">
-                <Dog size={16} className="absolute left-3 top-3.5 text-slate-400" />
+                <Dog size={16} className={`absolute left-3 top-3.5 ${errors.name ? 'text-red-400' : 'text-slate-400'}`} />
                 <input 
+                  ref={nameInputRef}
                   type="text"
                   value={dogName}
-                  onChange={(e) => setDogName(e.target.value)}
-                  className={`w-full pl-9 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-900 focus:border-${config.themeColor}-500 focus:outline-none transition-colors`}
+                  onChange={(e) => {
+                      setDogName(e.target.value);
+                      if (e.target.value) setErrors(prev => ({...prev, name: false}));
+                  }}
+                  className={`w-full pl-9 pr-4 py-3 bg-slate-50 border rounded-xl text-sm font-semibold text-slate-700 focus:outline-none transition-colors ${errors.name ? 'border-red-500 bg-red-50 focus:border-red-500' : `border-slate-200 focus:border-${config.themeColor}-500`}`}
                   placeholder="Ex: Thor"
                 />
               </div>
+              {errors.name && (
+                  <p className="text-red-500 text-[10px] font-bold mt-1 flex items-center gap-1 animate-pulse">
+                      <AlertCircle size={10} /> Por favor, insira o nome do cão.
+                  </p>
+              )}
             </div>
 
             {/* Size Selector */}
             <div>
-              <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Porte (Tamanho)</label>
+              <label className={`block text-xs font-bold uppercase mb-2 ${errors.size ? 'text-red-500' : 'text-slate-400'}`}>
+                  Porte (Tamanho) {errors.size && '*'}
+              </label>
               <div className="grid grid-cols-3 gap-2">
                 {[
                   { id: 'small', label: 'Pequeno', w: 'text-xs' },
@@ -112,11 +159,14 @@ export const ServiceDetailView: React.FC<ServiceDetailProps> = ({ service, onBac
                 ].map((s) => (
                   <button
                     key={s.id}
-                    onClick={() => setDogSize(s.id as DogSize)}
+                    onClick={() => {
+                        setDogSize(s.id as DogSize);
+                        setErrors(prev => ({...prev, size: false}));
+                    }}
                     className={`py-3 rounded-xl border-2 flex flex-col items-center justify-center gap-1 transition-all active:scale-95 ${
                       dogSize === s.id 
                         ? `border-${config.themeColor}-500 bg-${config.themeColor}-50 text-${config.themeColor}-600` 
-                        : 'border-slate-100 text-slate-400 hover:border-slate-300'
+                        : (errors.size ? 'border-red-200 bg-red-50 text-red-400' : 'border-slate-100 text-slate-400 hover:border-slate-300')
                     }`}
                   >
                     <Dog size={20} className={s.id === 'large' ? 'scale-125' : s.id === 'small' ? 'scale-75' : ''} />
@@ -128,15 +178,21 @@ export const ServiceDetailView: React.FC<ServiceDetailProps> = ({ service, onBac
 
             {/* Breed Autocomplete */}
             <div className="relative">
-              <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Raça</label>
+              <label className={`block text-xs font-bold uppercase mb-1 ${errors.breed ? 'text-red-500' : 'text-slate-400'}`}>
+                  Raça {errors.breed && '*'}
+              </label>
               <div className="relative">
-                <Search size={16} className="absolute left-3 top-3.5 text-slate-400" />
+                <Search size={16} className={`absolute left-3 top-3.5 ${errors.breed ? 'text-red-400' : 'text-slate-400'}`} />
                 <input 
                   type="text"
                   value={breed}
-                  onChange={(e) => { setBreed(e.target.value); setShowSuggestions(true); }}
+                  onChange={(e) => { 
+                      setBreed(e.target.value); 
+                      setShowSuggestions(true); 
+                      if(e.target.value) setErrors(prev => ({...prev, breed: false}));
+                  }}
                   onFocus={() => setShowSuggestions(true)}
-                  className={`w-full pl-9 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-900 focus:border-${config.themeColor}-500 focus:outline-none transition-colors`}
+                  className={`w-full pl-9 pr-4 py-3 bg-slate-50 border rounded-xl text-sm font-semibold text-slate-700 focus:outline-none transition-colors ${errors.breed ? 'border-red-500 bg-red-50 focus:border-red-500' : `border-slate-200 focus:border-${config.themeColor}-500`}`}
                   placeholder="Digite para buscar..."
                 />
               </div>
@@ -165,11 +221,18 @@ export const ServiceDetailView: React.FC<ServiceDetailProps> = ({ service, onBac
         </div>
 
         {/* Floating CTA Placeholder height to prevent overlap */}
-        <div className="h-16"></div>
+        <div className="h-20"></div>
       </div>
 
       {/* Floating CTA */}
       <div className="fixed sm:absolute bottom-0 left-0 w-full bg-white border-t border-slate-100 p-4 z-50 sm:rounded-b-[2.5rem]">
+        {service.price && (
+            <div className="text-center mb-2">
+                <span className="text-sm font-bold text-green-600 bg-green-50 px-4 py-1 rounded-full border border-green-100">
+                    Investimento: {service.price}
+                </span>
+            </div>
+        )}
         <button 
           onClick={handleWhatsAppClick}
           className="w-full bg-green-500 text-white font-bold py-4 rounded-xl shadow-lg active:scale-95 transition hover:bg-green-600 flex items-center justify-center gap-2"

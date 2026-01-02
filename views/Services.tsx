@@ -98,10 +98,17 @@ export const ServicesView: React.FC<ServicesProps> = ({ onServiceSelect }) => {
                 </div>
               )}
 
-              <button className={`w-full py-3.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-colors ${service.popular ? `bg-${config.themeColor}-500 text-white hover:bg-${config.themeColor}-600 shadow-md shadow-${config.themeColor}-200` : 'bg-slate-900 text-white hover:bg-slate-800'}`}>
-                Quero agendar este
-                <ArrowRight size={14} />
-              </button>
+              <div className="flex items-center justify-between gap-3">
+                  {service.price && (
+                      <div className="bg-green-50 text-green-700 font-bold px-3 py-2 rounded-xl text-xs border border-green-100 shadow-sm shrink-0">
+                          {service.price}
+                      </div>
+                  )}
+                  <button className={`flex-1 py-3.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-colors ${service.popular ? `bg-${config.themeColor}-500 text-white hover:bg-${config.themeColor}-600 shadow-md shadow-${config.themeColor}-200` : 'bg-slate-900 text-white hover:bg-slate-800'}`}>
+                    Quero agendar este
+                    <ArrowRight size={14} />
+                  </button>
+              </div>
             </div>
           </div>
         ))}
